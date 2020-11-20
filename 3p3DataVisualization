@@ -1,0 +1,42 @@
+% Create a table
+
+DROP TABLE IF EXISTS movieRatings;
+CREATE TABLE movieRatings (
+  userId INT,
+  movieId INT,
+  rating FLOAT,
+  timeRecorded INT
+) USING csv OPTIONS (
+  PATH "/mnt/training/movies/20m/ratings.csv",
+  header "true"
+);
+
+% Cast as timestamp
+
+SELECT
+  rating,
+  CAST(timeRecorded as timestamp)
+FROM
+  movieRatings;
+  
+  %Create a temporary View
+  
+CREATE
+OR REPLACE TEMPORARY VIEW ratingsByMonth AS
+SELECT
+  ROUND(AVG(rating), 3) AS avgRating,
+  month(CAST(timeRecorded as timestamp)) AS month
+FROM
+  movieRatings
+GROUP BY
+  month;
+  
+  %visualization with the Gui tool on databricks
+  
+  SELECT
+  *
+FROM
+  ratingsByMonth
+ORDER BY
+  avgRating;
+  
