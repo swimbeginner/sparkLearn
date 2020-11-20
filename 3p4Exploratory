@@ -1,0 +1,108 @@
+-- ANSWER
+DROP TABLE IF EXISTS outdoorProducts;
+CREATE TABLE outdoorProducts (
+  invoiceNo STRING,
+  stockCode STRING,
+  description STRING,
+  quantity INT,
+  invoiceDate STRING,
+  unitPrice DOUBLE,
+  customerID STRING,
+  countryName STRING
+) USING csv OPTIONS (
+  path "/mnt/training/online_retail/data-001/data.csv",
+  header "true"
+);
+
+-- ANSWER
+SELECT
+  count(*)
+FROM
+  outdoorProducts
+WHERE
+  quantity < 0;
+  
+  -- ANSWER
+CREATE
+OR REPLACE TEMPORARY VIEW sales AS
+SELECT
+  stockCode,
+  quantity,
+  unitPrice,
+  ROUND(quantity * unitPrice, 2) AS totalAmount,
+  countryName
+FROM
+  outdoorProducts
+WHERE
+ quantity > 0;
+ 
+ -- ANSWER
+SELECT
+  *
+FROM
+  sales
+ORDER BY
+  totalAmount DESC;
+  
+  -- ANSWER
+SELECT
+  DISTINCT(countryName)
+FROM
+  sales
+  
+  -- ANSWER
+CREATE
+OR REPLACE TEMP VIEW salesQuants AS
+SELECT
+  SUM(quantity) AS totalQuantity,
+  countryName
+FROM
+  sales
+GROUP BY
+  countryName
+ORDER BY
+  totalQuantity DESC;
+
+SELECT * FROM salesQuants;
+
+
+-- ANSWER
+
+DROP TABLE IF EXISTS countryCodes;
+CREATE TABLE countryCodes USING parquet OPTIONS (
+  path "/mnt/training/countries/ISOCountryCodes/ISOCountryLookup.parquet",
+  header "true"
+);
+-- ANSWER 
+DESCRIBE countryCodes;
+
+-- ANSWER
+SELECT
+  totalQuantity,
+  countryCodes.alpha3Code AS countryAbbr
+FROM
+  salesQuants
+  JOIN countryCodes ON countryCodes.EnglishShortName = salesQuants.CountryName
+  
+  -- ANSWER
+SELECT DISTINCT(EnglishShortName) FROM countryCodes ORDER BY EnglishShortName DESC;
+
+CREATE
+OR REPLACE TEMPORARY VIEW modCountryCodes AS
+SELECT
+  alpha3code,
+  REPLACE (
+    EnglishShortName,
+    "United Kingdom of Great Britain and Northern Ireland",
+    "United Kingdom"
+  ) AS EnglishShortName
+FROM
+  countryCodes;
+  
+  -- ANSWER
+SELECT
+  totalQuantity,
+  modCountryCodes.alpha3Code AS countryAbbr
+FROM
+  salesQuants
+  JOIN modCountryCodes ON modCountryCodes.EnglishShortName = salesQuants.CountryName
