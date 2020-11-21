@@ -1,0 +1,94 @@
+% create a table idempotent
+
+DROP TABLE IF EXISTS  outdoorProductsRaw
+CREATE TABLE   outdoorProductsRaw USING csv OPTIONS (
+path "/mnt/training/online_retail/data-001/data.csv",
+header "true"
+)
+
+% sample the table with spark function TableSample
+
+select * from outdoorProductsRaw TABLESAMPLE( 5 rows)
+
+SELECT * FROM outdoorProductsRaw TABLESAMPLE (2 PERCENT) ORDER BY InvoiceDate 
+
+%check for null values
+
+SELECT count(*) FROM outdoorProductsRaw WHERE Description IS NULL;
+
+% More codes
+%coalesce: change null to a value
+%split: splits a string value around a specified character and returns an array.
+
+CREATE
+OR REPLACE TEMPORARY VIEW outdoorProducts AS
+SELECT
+  InvoiceNo,
+  StockCode,
+  COALESCE(Description, "Misc") AS Description, %%%%%%%%%change to misc from null
+  Quantity,
+  SPLIT(InvoiceDate, "/")[0] month,
+  SPLIT(InvoiceDate, "/")[1] day,
+  SPLIT(SPLIT(InvoiceDate, " ")[0], "/")[2] year,
+  UnitPrice,
+  Country
+FROM
+  outdoorProductsRaw
+  
+  
+  
+  %%%%%%%%%%%%%%%%%%% Create a cTE
+  
+  DROP TABLE IF EXISTS standardDate;
+CREATE TABLE standardDate
+
+WITH padStrings AS
+(
+SELECT 
+  InvoiceNo,
+  StockCode,
+  Description,
+  Quantity, 
+  LPAD(month, 2, 0) AS month,
+  LPAD(day, 2, 0) AS day,
+  year,
+  UnitPrice, 
+  Country
+FROM outdoorProducts
+)
+SELECT 
+ InvoiceNo,
+  StockCode,
+  Description,
+  Quantity, 
+  concat_ws("/", month, day, year) sDate,
+  UnitPrice,
+  Country
+FROM padStrings;
+
+
+%%%%%%%%%%%%%date operation, please check spark documents
+
+% to_date
+%date_format
+
+CREATE
+OR REPLACE TEMPORARY VIEW salesDateFormatted AS
+SELECT
+  InvoiceNo,
+  StockCode,
+  to_date(sDate, "MM/dd/yy") date,
+  Quantity,
+  CAST(UnitPrice AS DOUBLE)
+FROM
+  standardDate
+  
+  %%%%%%%%%%%
+  SELECT
+  date_format(date, "E") day,
+  SUM(quantity) totalQuantity
+FROM
+  salesDateFormatted
+GROUP BY (day)
+ORDER BY day
+  
