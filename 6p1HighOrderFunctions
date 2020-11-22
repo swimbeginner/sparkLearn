@@ -1,0 +1,44 @@
+%%%%%%Create table from Json
+
+CREATE TABLE IF NOT EXISTS DatabricksBlog
+  USING json
+  OPTIONS (
+    path "dbfs:/mnt/training/databricks-blog.json",
+    inferSchema "true"
+  )
+  
+  %%%%% Filter function for move awary string to another column <> not equal
+  
+  SELECT
+  categories,
+  FILTER (categories, category -> category <> "Engineering Blog") woEngineering
+FROM DatabricksBlog
+
+%%%%%%%%% choose egineering and keep them
+
+SELECT
+  *
+FROM
+  (
+    SELECT
+      authors, title,
+      FILTER(categories, category -> category = "Engineering Blog") AS blogType
+    FROM
+      DatabricksBlog
+  )
+WHERE
+  size(blogType) > 0
+  
+  %%% exist function
+  
+  SELECT
+  categories,
+  EXISTS (categories, c -> c = "Company Blog") companyFlag
+FROM DatabricksBlog
+
+
+%%%%%%%%%%%Transform
+
+SELECT 
+  TRANSFORM(categories, cat -> LOWER(cat)) lwrCategories
+FROM DatabricksBlog
