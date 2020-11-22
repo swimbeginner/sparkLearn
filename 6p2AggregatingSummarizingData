@@ -1,0 +1,51 @@
+
+%%%% reduce function
+
+CREATE OR REPLACE TEMPORARY VIEW Co2LevelsTemporary
+AS
+  SELECT
+    dc_id, 
+    device_type,
+    co2Level,
+    REDUCE(co2Level, 0, (c, acc) -> c + acc, acc ->(acc div size(co2Level))) as averageCo2Level
+  
+  FROM DeviceData  
+  SORT BY averageCo2Level DESC;
+
+SELECT * FROM Co2LevelsTemporary
+
+%%%%%%%%%%%%%
+%Pivot tables example
+%%%%change row to column
+
+SELECT
+  *
+FROM
+  (
+    SELECT
+      month(date) month,
+      REDUCE(co2_Level, 0, (c, acc) -> c + acc, acc ->(acc div size(co2_Level))) averageCo2Level
+    FROM
+      DeviceData
+  ) PIVOT (
+    avg(averageCo2Level) avg FOR month IN (7 JUL, 8 AUG, 9 SEPT, 10 OCT, 11 NOV)
+  )
+  
+  %roll up
+  
+  SELECT 
+  COALESCE(dc_id, "All data centers") AS dc_id,
+  COALESCE(device_type, "All devices") AS device_type,
+  ROUND(AVG(averageCo2Level))  AS avgCo2Level
+FROM Co2LevelsTemporary
+GROUP BY ROLLUP (dc_id, device_type)
+ORDER BY dc_id, device_type;
+
+%%cube
+SELECT 
+  COALESCE(dc_id, "All data centers") AS dc_id,
+  COALESCE(device_type, "All devices") AS device_type,
+  ROUND(AVG(averageCo2Level))  AS avgCo2Level
+FROM Co2LevelsTemporary
+GROUP BY CUBE (dc_id, device_type)
+ORDER BY dc_id, device_type;
