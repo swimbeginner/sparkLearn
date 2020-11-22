@@ -1,0 +1,75 @@
+% create a partition from a Device type
+
+CREATE TABLE IF NOT EXISTS AvgTemps
+PARTITIONED BY (device_type)
+AS
+  SELECT
+    dc_id,
+    date,
+    temps,
+    REDUCE(temps, 0, (t, acc) -> t + acc, acc ->(acc div size(temps))) as avg_daily_temp_c,
+    device_type
+  FROM DeviceData;
+  
+SELECT * FROM AvgTemps;
+
+%%%%%5 show partitions
+
+SHOW PARTITIONS AvgTemps
+
+%%% Create a widget
+
+CREATE WIDGET DROPDOWN selectedDeviceType DEFAULT "sensor-inest" CHOICES
+SELECT
+  DISTINCT device_type
+FROM
+  DeviceData
+  
+  %% widget read by the device_type
+  SELECT 
+  device_type,
+  ROUND(AVG(avg_daily_temp_c),4) AS avgTemp,
+  ROUND(STD(avg_daily_temp_c), 2) AS stdTemp
+FROM AvgTemps
+WHERE device_type = getArgument("selectedDeviceType")
+GROUP BY device_type
+
+%%%%remove widget
+REMOVE WIDGET selectedDeviceType
+
+
+%%%%window function (a way to aggregate data)
+
+%over clause
+
+SELECT 
+  dc_id,
+  month(date),
+  day(date),
+  avg_daily_temp_c,
+  AVG(avg_daily_temp_c) 
+  OVER (PARTITION BY month(date), dc_id) AS avg_monthly_temp_c 
+FROM AvgTemps;
+WHERE month(date)="8" AND dc_id = "dc-102";
+
+%%%%%%%%CETs with window functions
+
+WITH DiffChart AS
+(
+SELECT 
+  dc_id,
+  date,
+  avg_daily_temp_c,
+  AVG(avg_daily_temp_c)    %%%%%
+  OVER (PARTITION BY month(date), dc_id) AS avg_monthly_temp_c  %%%%%%%
+FROM AvgTemps
+)
+SELECT 
+  dc_id,
+  date,
+  avg_daily_temp_c,
+  avg_monthly_temp_c,
+  avg_daily_temp_c - ROUND(avg_monthly_temp_c) AS degree_diff
+FROM DiffChart;
+
+
