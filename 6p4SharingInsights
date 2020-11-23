@@ -1,0 +1,99 @@
+%%%First create a table
+
+drop table if exists DCDeviceRaw;
+create table  DCDeviceRaw
+using json
+options(
+ path "/mnt/training/iot-devices/data-centers/energy.json",
+ inferSchema "true" 
+)
+% show the table
+
+select * from energy tablesample (1 percent)
+
+%%%%%%%%%timestamp conversion from year
+
+CREATE
+OR REPLACE TEMPORARY VIEW DCDevices AS
+SELECT
+  device_id deviceId,
+  device_type deviceType,
+  battery_level batteryLevel,
+  co2_level co2Level,
+  signal,
+  temps,
+  to_timestamp(timestamp, 'yyyy/MM/dd HH:mm:ss') time
+FROM
+  DCDeviceDataRaw;
+  
+  %%%%%%55
+  --ANSWER
+SELECT
+  deviceId,
+  batteryLevel,
+  EXISTS(batteryLevel, level -> level < 0) needService
+FROM
+  DCDevices
+ORDER BY deviceId, batteryLevel 
+
+%%%co2 level
+
+--ANSWER
+SELECT
+  deviceId,
+  deviceType,
+  highCO2,
+  time
+FROM (SELECT * , FILTER(co2Level, level -> level > 1400) highCO2 FROM DCDevices)
+WHERE size(highCO2) > 0
+ORDER BY deviceId, highCO2
+
+%%%Create partition table
+
+DROP TABLE IF EXISTS byDevice;
+CREATE TABLE byDevice
+USING
+  parquet
+PARTITIONED BY
+  (p_deviceId) AS
+SELECT
+  deviceType,
+  batteryLevel,
+  co2Level,
+  signal,
+  temps,
+  time,
+  deviceId AS p_deviceId
+FROM
+  DCDevices;
+
+SELECT * FROM byDevice
+
+%%%%%%%%%%%%5
+
+SELECT 
+  deviceType,
+  REDUCE(temps, BIGINT(0), (t, a) -> t + a, a -> (a div size(temps))) AS avg_temps,
+   to_date(time) AS dte
+FROM 
+  byDevice
+  %%%%%%%%%%%%%% create widget
+  
+
+CREATE WIDGET DROPDOWN selectedDeviceId DEFAULT "0" CHOICES
+SELECT
+  DISTINCT deviceId
+FROM
+  DCDevices
+ORDER BY deviceId
+
+%%%%%%%%%%how to use widget
+SELECT 
+  getArgument("selectedDeviceId") AS selectedDeviceId,
+  REDUCE(temps, BIGINT(0), (t, a) -> t + a, a -> (a div size(temps))) AS avg_temps,
+   to_date(time) AS dte
+FROM 
+  byDevice
+
+
+
