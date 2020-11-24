@@ -61,3 +61,17 @@ WHEN NOT MATCHED THEN                                       -- WHEN NOT MATCHED 
   VALUES (name, heartrate, time, dte, p_device_id) 
   %%%%%% waht is the VALUES means?
     
+    
+    %%%%%%%%%%gold level write
+    DROP TABLE IF EXISTS health_tracker_gold;              
+
+CREATE TABLE health_tracker_gold                        
+USING DELTA
+LOCATION "/health_tracker/gold"
+AS 
+SELECT 
+  AVG(heartrate) AS meanHeartrate,
+  STD(heartrate) AS stdHeartrate,
+  MAX(heartrate) AS maxHeartrate
+FROM health_tracker_silver
+GROUP BY p_device_id
