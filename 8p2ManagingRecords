@@ -1,0 +1,63 @@
+%%%fix negative data by using CTAS methods
+
+CREATE OR REPLACE TEMPORARY VIEW updates 
+AS (
+  SELECT name, (prev_amt+next_amt)/2 AS heartrate, time, dte, p_device_id
+  FROM (
+    SELECT *, 
+    LAG(heartrate) OVER (PARTITION BY p_device_id, dte ORDER BY p_device_id, dte) AS prev_amt, 
+    LEAD(heartrate) OVER (PARTITION BY p_device_id, dte ORDER BY p_device_id, dte) AS next_amt 
+    FROM health_tracker_silver
+  ) 
+  WHERE heartrate < 0
+)
+
+%%%%%%%some more data
+DROP TABLE IF EXISTS health_tracker_data_2020_02_late;              
+
+CREATE TABLE health_tracker_data_2020_02_late                        
+USING json                                             
+OPTIONS (
+  path "dbfs:/mnt/training/healthcare/tracker/raw-late.json",
+  inferSchema "true"
+  );
+  
+  %%%%%%%% Insert data
+  CREATE OR REPLACE TEMPORARY VIEW inserts AS (
+  SELECT
+    value.name,
+    value.heartrate,
+    CAST(FROM_UNIXTIME(value.time) AS timestamp) AS time,
+    CAST(FROM_UNIXTIME(value.time) AS DATE) AS dte,
+    value.device_id p_device_id
+  FROM
+    health_tracker_data_2020_02_late
+)
+
+
+%%%%%%%%union all, (compare to join)
+
+CREATE OR REPLACE TEMPORARY VIEW upserts
+AS (
+    SELECT * FROM updates 
+    UNION ALL 
+    SELECT * FROM inserts
+    )
+    
+    
+    %%%%%merge table with condition
+    
+    MERGE INTO health_tracker_silver                            -- the MERGE instruction is used to perform the upsert
+USING upserts
+
+ON health_tracker_silver.time = upserts.time AND        
+   health_tracker_silver.p_device_id = upserts.p_device_id  -- ON is used to describe the MERGE condition
+   
+WHEN MATCHED THEN                                           -- WHEN MATCHED describes the update behavior
+  UPDATE SET
+  health_tracker_silver.heartrate = upserts.heartrate   
+WHEN NOT MATCHED THEN                                       -- WHEN NOT MATCHED describes the insert behavior
+  INSERT (name, heartrate, time, dte, p_device_id)              
+  VALUES (name, heartrate, time, dte, p_device_id) 
+  %%%%%% waht is the VALUES means?
+    
