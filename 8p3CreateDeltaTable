@@ -1,0 +1,31 @@
+%Create a table
+
+DROP TABLE IF EXISTS flights;
+-- Create a standard table and import US based flights for year 2008
+-- USING Clause: Specify "delta" format instead of the standard parquet format
+-- PARTITIONED BY clause: Orginize data based on "Origin" column (Originating Airport code).
+-- FROM Clause: Import data from a csv file.
+CREATE TABLE flights
+USING
+  delta
+PARTITIONED BY
+  (Origin)
+SELECT
+  _c0 AS Year,
+  _c1 AS MONTH,
+  FROM
+  csv.`dbfs:/databricks-datasets/asa/airlines/2008.csv`;
+  
+  
+  %%%%%%%%% Optimize by Zorder
+  
+  OPTIMIZE flights ZORDER BY (DayofWeek);
+  
+  %%%%%%%% Rerun the query
+  
+  SELECT Month, Origin, count(*) as TotalFlights 
+FROM flights
+WHERE DayOfWeek = 1 
+GROUP BY Month, Origin 
+ORDER BY TotalFlights DESC
+LIMIT 20;
